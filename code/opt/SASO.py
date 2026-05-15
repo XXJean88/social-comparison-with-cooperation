@@ -7,10 +7,10 @@ import os
 import json
 
 # ==============================
-# 1. 构建固定网络（改为N=50）
+# 1. Build fixed network (changed to N=50)
 # ==============================
 
-N = 50   # 与可视化代码中的 n=50 保持一致
+N = 50   # Keep consistent with n=50 in visualization code
 G = nx.random_graphs.random_regular_graph(4, N, seed=42)
 # G = nx.barabasi_albert_graph(N, m=2, seed=42)
 # G = nx.watts_strogatz_graph(N, k=4, p=0.3, seed=42)
@@ -24,7 +24,7 @@ deg = A.sum(axis=1)
 Pi = deg / deg.sum()
 
 # ==============================
-# 2. 计算聚合时间 Eta (只做一次)
+# 2. Compute coalescence times Eta (only once)
 # ==============================
 
 def compute_eta(P):
@@ -53,7 +53,7 @@ Eta = compute_eta(P)
 print("Done.")
 
 # ==============================
-# 3. 预计算 A0, B0, C, D
+# 3. Precompute A0, B0, C, D
 # ==============================
 
 eta1 = np.sum(Pi[:,None] * P * Eta)
@@ -75,7 +75,7 @@ for j in range(N):
 print("Precomputation finished.")
 
 # ==============================
-# 4. 阈值函数（O(N)）
+# 4. Threshold function (O(N))
 # ==============================
 
 def threshold_batch(L):
@@ -88,30 +88,30 @@ def threshold_batch(L):
     out[mask] = val
     return out
 
-# 初始阈值（λ = 0）
+# Initial threshold (lambda = 0)
 init_lambda = np.zeros(N)
 init_threshold = threshold_batch(init_lambda.reshape(1,-1))[0]
 print("Initial threshold:", init_threshold)
 
 # ==============================
-# 5. PSO 优化（带历史记录）
+# 5. PSO optimization (with history recording)
 # ==============================
 
 def PSO_optimize(max_iter=150, swarm_size=40):
-    # 历史记录容器
+    # History containers
     history = {
-        'thresholds': [],               # 每代全局最优阈值
-        'best_lambda_history': [],      # 每代全局最优λ向量
-        'lambda_mean_history': [],      # 每代所有粒子λ的均值（N维）
-        'lambda_std_history': []        # 每代所有粒子λ的标准差（N维）
+        'thresholds': [],               # Global best threshold per generation
+        'best_lambda_history': [],      # Global best lambda vector per generation
+        'lambda_mean_history': [],      # Mean of all particles' lambda per generation (N-dim)
+        'lambda_std_history': []        # Std dev of all particles' lambda per generation (N-dim)
     }
 
     w = 0.7
     c1 = 1.5
     c2 = 1.5
 
-    pos = np.zeros((swarm_size, N))                     # 位置全零
-    vel = np.random.randn(swarm_size, N) * 0.1          # 速度小随机数
+    pos = np.zeros((swarm_size, N))                     # All positions zero
+    vel = np.random.randn(swarm_size, N) * 0.1          # Small random velocity
 
     pbest = pos.copy()
     pbest_val = threshold_batch(pos)
@@ -123,7 +123,7 @@ def PSO_optimize(max_iter=150, swarm_size=40):
     print("\nStart PSO optimization")
     print(f"Iter 0: threshold = {gbest_val:.6f}")
 
-    # 记录第0代
+    # Record generation 0
     history['thresholds'].append(gbest_val)
     history['best_lambda_history'].append(gbest.copy())
     history['lambda_mean_history'].append(np.mean(pos, axis=0))
@@ -149,7 +149,7 @@ def PSO_optimize(max_iter=150, swarm_size=40):
         gbest = pbest[gbest_idx].copy()
         gbest_val = pbest_val[gbest_idx]
 
-        # 记录当前代
+        # Record current generation
         history['thresholds'].append(gbest_val)
         history['best_lambda_history'].append(gbest.copy())
         history['lambda_mean_history'].append(np.mean(pos, axis=0))
@@ -159,7 +159,7 @@ def PSO_optimize(max_iter=150, swarm_size=40):
             print(f"Iter {it}: threshold = {gbest_val:.6f}")
     return gbest, gbest_val, history
 
-# 运行优化
+# Run optimization
 best_lambda, best_threshold, history = PSO_optimize()
 
 print("\nOptimization finished.")
@@ -167,18 +167,18 @@ print("Final threshold:", best_threshold)
 print("Initial threshold (lambda=0):", init_threshold)
 
 # ==============================
-# 6. 保存优化过程数据
+# 6. Save optimization process data
 # ==============================
 
 def save_pso_data(N, G, history, best_lambda, best_threshold, init_threshold):
     network_type = 'RG'
 
-    # 创建目录
+    # Create directory
     save_dir = f"{network_type}_{N}_network_pso_data"
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)
 
-    # 打包数据
+    # Pack data
     data = {
         'network_info': {
             'type': network_type,
@@ -194,7 +194,7 @@ def save_pso_data(N, G, history, best_lambda, best_threshold, init_threshold):
             'c2': 1.5
         },
         'particle_swarm': {
-            'best_lambda': best_lambda.tolist(),   # 转为列表便于JSON序列化
+            'best_lambda': best_lambda.tolist(),   # Convert to list for JSON serialization
             'best_threshold': float(best_threshold),
             'init_threshold': float(init_threshold),
             'history': {
@@ -206,19 +206,19 @@ def save_pso_data(N, G, history, best_lambda, best_threshold, init_threshold):
         }
     }
 
-    # 保存为 pickle（完整数据）
+    # Save as pickle (full data)
     pkl_path = os.path.join(save_dir, f"{network_type}_{N}_full_data.pkl")
     with open(pkl_path, 'wb') as f:
         pickle.dump(data, f)
     print(f"Full data saved to {pkl_path}")
 
-    # 同时保存一份 JSON（便于快速查看，但会丢失 numpy 类型）
+    # Also save a JSON (for quick inspection, loses numpy types)
     json_path = os.path.join(save_dir, f"{network_type}_{N}_particle_swarm_results.json")
     with open(json_path, 'w') as f:
         json.dump(data['particle_swarm'], f, indent=2)
     print(f"JSON summary saved to {json_path}")
 
-# 执行保存
+# Execute saving
 save_pso_data(N, G, history, best_lambda, best_threshold, init_threshold)
 
 print("\nAll data saved. You can now run the visualization code.")
