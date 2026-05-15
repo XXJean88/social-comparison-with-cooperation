@@ -7,7 +7,7 @@ from scipy import stats
 warnings.filterwarnings("ignore", message=".*compiled using NumPy 1.x.*")
 
 def generate_lambda_distribution(N, distribution_type, params=None, seed=42):
-    """生成 lambda 分布（可复现）"""
+    """Generate lambda distribution (reproducible)"""
     np.random.seed(seed)
     default_params = {
         'uniform': {'low': -1, 'high': 1},
@@ -38,7 +38,7 @@ def generate_lambda_distribution(N, distribution_type, params=None, seed=42):
         signs = np.random.choice([-1, 1], N)
         lambda_array = lambda_array * signs
     else:
-        raise ValueError(f"不支持的分布类型: {distribution_type}")
+        raise ValueError(f"Unsupported distribution type: {distribution_type}")
     
     if np.linalg.norm(lambda_array) > 0:
         lambda_array = lambda_array / np.linalg.norm(lambda_array) * np.sqrt(N)
@@ -46,14 +46,14 @@ def generate_lambda_distribution(N, distribution_type, params=None, seed=42):
 
 def compute_coefficients_direct(G, base_lambda_array):
     """
-    计算常数项 eta_1, eta_2, eta_3 以及与 lambda 有关的简化项：
+    Compute constant terms eta_1, eta_2, eta_3 and the simplified lambda-related terms:
         coeff2, coeff4, coeff6, coeff8
-    其他项在阈值公式中相互抵消，不再计算。
+    Other terms cancel out in the threshold formula and are not computed.
     """
     adj = nx.adjacency_matrix(G).todense()
     N = len(G.nodes)
     
-    # 转移概率矩阵 P
+    # Transition probability matrix P
     P = np.zeros((N, N))
     for i in range(N):
         deg = np.sum(adj[i])
@@ -63,13 +63,13 @@ def compute_coefficients_direct(G, base_lambda_array):
     P2 = P @ P
     P3 = P @ P @ P
     
-    # 平稳分布 Pi
+    # Stationary distribution Pi
     Pi = np.zeros(N)
     W = np.sum(adj)
     for i in range(N):
         Pi[i] = np.sum(adj[i]) / W
     
-    # 构建线性系统求 Eta
+    # Build linear system to solve for Eta
     A = np.zeros((N * N, N * N))
     B = np.ones((N * N, 1)) / 2
     diag_idx = [i * N + i for i in range(N)]
@@ -80,13 +80,13 @@ def compute_coefficients_direct(G, base_lambda_array):
         else:
             i = row // N
             j = row % N
-            # 基于 j 的转移
+            # Transition based on j
             for k in range(i * N, (i + 1) * N):
                 if k % N == j:
                     A[row, k] = 1 - 0.5 * P[j, k % N]
                 else:
                     A[row, k] = -0.5 * P[j, k % N]
-            # 基于 i 的转移
+            # Transition based on i
             for k in range(j * N, (j + 1) * N):
                 A[row, k] = -0.5 * P[i, k % N]
     try:
@@ -95,7 +95,7 @@ def compute_coefficients_direct(G, base_lambda_array):
         X = np.linalg.lstsq(A, B, rcond=None)[0]
     Eta = X.reshape(N, N)
     
-    # 常数项
+    # Constant terms
     eta_1 = 0.0
     eta_2 = 0.0
     eta_3 = 0.0
@@ -105,7 +105,7 @@ def compute_coefficients_direct(G, base_lambda_array):
             eta_2 += Pi[i] * P2[i, j] * Eta[i, j]
             eta_3 += Pi[i] * P3[i, j] * Eta[i, j]
     
-    # 只计算最终需要的与 lambda 有关的项
+    # Compute only the lambda-related terms needed in the final formula
     coeff2 = 0.0   # ∑ λ_j π_i p_{ij} p_{jk} η_{jk}
     coeff4 = 0.0   # ∑ λ_l π_i p_{ij} p_{il} p_{lk} η_{jk}
     coeff6 = 0.0   # ∑ λ_j π_i p_{ij} p^{(2)}_{jk} η_{jk}
@@ -162,11 +162,11 @@ def compute_coefficients_direct(G, base_lambda_array):
     }
 
 def compute_threshold_from_coefficients(coeffs, lambda_val):
-    """使用简化系数计算阈值"""
+    """Compute threshold using the simplified coefficients"""
     eta_1 = coeffs['eta_1']
     eta_2 = coeffs['eta_2']
     eta_3 = coeffs['eta_3']
-    # 原公式中 c1,c3,c5,c7 均被抵消，仅保留以下四项
+    # In the original formula, c1, c3, c5, c7 cancel out, only the following four terms remain
     c2 = coeffs['coeff2']
     c4 = coeffs['coeff4']
     c6 = coeffs['coeff6']
@@ -180,7 +180,7 @@ def compute_threshold_from_coefficients(coeffs, lambda_val):
     return numerator / denominator
 
 def find_asymptotes(lambda_vals, thresholds, tolerance=0.05):
-    """查找渐近线（与原代码相同）"""
+    """Find asymptotes (same as original code)"""
     thresholds_array = np.array(thresholds)
     lambda_array = np.array(lambda_vals)
     finite_mask = np.isfinite(thresholds_array)
@@ -212,11 +212,11 @@ def find_asymptotes(lambda_vals, thresholds, tolerance=0.05):
     return vertical_asymptote, horizontal_asymptote
 
 def run_calculations_for_distribution(distribution_type, graph_type, n_values, lambda_range=(-10,10), lambda_step=0.5, seed=42):
-    """主计算流程（可复现）"""
+    """Main computation workflow (reproducible)"""
     results_dict = {}
     for n in n_values:
-        print(f"\n开始计算: 分布={distribution_type}, 网络={graph_type}, 规模={n}")
-        # 生成连通图
+        print(f"\nStarting: distribution={distribution_type}, network={graph_type}, size={n}")
+        # Generate connected graph
         cur_seed = seed
         if graph_type == "rg":
             G = nx.random_graphs.random_regular_graph(4, n, seed=cur_seed)
@@ -234,35 +234,35 @@ def run_calculations_for_distribution(distribution_type, graph_type, n_values, l
                 cur_seed += 1
                 G = nx.watts_strogatz_graph(n=n, k=4, p=0.3, seed=cur_seed)
         else:
-            raise ValueError(f"未知的网络类型: {graph_type}")
-        print(f"网络: {graph_type}, 节点数: {n}, 边数: {G.number_of_edges()}")
+            raise ValueError(f"Unknown network type: {graph_type}")
+        print(f"Network: {graph_type}, nodes: {n}, edges: {G.number_of_edges()}")
         
-        # 生成基础 lambda 分布（固定种子）
+        # Generate base lambda distribution (fixed seed)
         base_lambda = generate_lambda_distribution(n, distribution_type, seed=seed)
         lambda_stats = {
             'mean': np.mean(base_lambda), 'std': np.std(base_lambda),
             'min': np.min(base_lambda), 'max': np.max(base_lambda),
             'skewness': stats.skew(base_lambda), 'kurtosis': stats.kurtosis(base_lambda)
         }
-        print(f"lambda统计: 均值={lambda_stats['mean']:.3f}, 标准差={lambda_stats['std']:.3f}")
-        print(f"           最小值={lambda_stats['min']:.3f}, 最大值={lambda_stats['max']:.3f}")
+        print(f"Lambda stats: mean={lambda_stats['mean']:.3f}, std={lambda_stats['std']:.3f}")
+        print(f"            min={lambda_stats['min']:.3f}, max={lambda_stats['max']:.3f}")
         
-        # 计算系数（仅包含简化后的四项）
+        # Compute coefficients (only the simplified four terms)
         coeffs = compute_coefficients_direct(G, base_lambda)
         
-        # 遍历缩放因子
+        # Iterate over scaling factors
         lambda_scales = np.arange(lambda_range[0], lambda_range[1] + lambda_step/2, lambda_step)
         thresholds = []
         for idx, scale in enumerate(lambda_scales):
             try:
                 thr = compute_threshold_from_coefficients(coeffs, scale)
             except Exception as e:
-                print(f"计算scale={scale}时出错: {e}")
+                print(f"Error computing scale={scale}: {e}")
                 thr = np.inf
             thresholds.append(thr)
             if (idx+1) % 10 == 0 or idx == 0 or idx == len(lambda_scales)-1:
-                status = "∞" if thr == np.inf else f"{thr:.6f}"
-                print(f"进度: {idx+1:3d}/{len(lambda_scales):3d} | scale = {scale:5.1f} | 阈值 = {status}")
+                status = "inf" if thr == np.inf else f"{thr:.6f}"
+                print(f"Progress: {idx+1:3d}/{len(lambda_scales):3d} | scale = {scale:5.1f} | threshold = {status}")
         
         vert_asym, horz_asym = find_asymptotes(lambda_scales, thresholds)
         results_dict[n] = {
@@ -276,17 +276,17 @@ def run_calculations_for_distribution(distribution_type, graph_type, n_values, l
             'vertical_asymptote': vert_asym,
             'horizontal_asymptote': horz_asym
         }
-        print(f"完成 n={n} 的计算")
-        if vert_asym: print(f"垂直渐近线位置: scale = {vert_asym:.4f}")
-        if horz_asym: print(f"水平渐近线位置: b/c = {horz_asym:.4f}")
+        print(f"Finished n={n}")
+        if vert_asym: print(f"Vertical asymptote at scale = {vert_asym:.4f}")
+        if horz_asym: print(f"Horizontal asymptote at b/c = {horz_asym:.4f}")
     return results_dict, cur_seed
 
 def save_results_pickle(results_dict, distribution_type, graph_type):
-    """保存结果到文件"""
+    """Save results to files"""
     filename = f"{distribution_type}_{graph_type}_results.pkl"
     with open(filename, 'wb') as f:
         pickle.dump(results_dict, f)
-    print(f"\n结果已保存到: {filename}")
+    print(f"\nResults saved to: {filename}")
     for n, res in results_dict.items():
         lambda_fn = f"lambda_{distribution_type}_{graph_type}_n{n}.txt"
         with open(lambda_fn, 'w') as f:
@@ -299,48 +299,48 @@ def save_results_pickle(results_dict, distribution_type, graph_type):
             for scale, thr in zip(res['lambda_scales'], res['thresholds']):
                 thr_str = "inf" if thr in (np.inf, float('inf')) else f"{thr:.6f}"
                 f.write(f"{scale:.6f},{thr_str}\n")
-        print(f"  Lambda值保存到: {lambda_fn}\n  阈值数据保存到: {csv_fn}")
+        print(f"  Lambda values saved to: {lambda_fn}\n  Threshold data saved to: {csv_fn}")
     return filename
 
 def main():
     distribution_types = ['uniform', 'normal', 'exponential', 'powerlaw']
-    graph_types = ['ws']        # 可修改为 ['rg','ws','ba']
-    n_values = [50]             # 网络规模
+    graph_types = ['ws']        # Can be changed to ['rg','ws','ba']
+    n_values = [50]             # Network sizes
     lambda_range = (-2, 2)
     lambda_step = 0.5
     
     all_results = {}
     for dist in distribution_types:
         print("="*70)
-        print(f"开始计算分布类型: {dist}")
+        print(f"Starting distribution: {dist}")
         print("="*70)
         for gtype in graph_types:
-            print(f"\n网络类型: {gtype}")
+            print(f"\nNetwork type: {gtype}")
             print("-"*50)
             res_dict, _ = run_calculations_for_distribution(dist, gtype, n_values, lambda_range, lambda_step, seed=42)
             save_results_pickle(res_dict, dist, gtype)
             all_results[f"{dist}_{gtype}"] = res_dict
-            print("\n结果摘要:")
+            print("\nSummary:")
             for n, r in res_dict.items():
                 finite = [t for t in r['thresholds'] if t not in (np.inf, float('inf'))]
                 if finite:
-                    print(f"  n={n}: 阈值范围 [{min(finite):.4f}, {max(finite):.4f}]")
-                    if r['vertical_asymptote']: print(f"        垂直渐近线: scale = {r['vertical_asymptote']:.4f}")
-                    if r['horizontal_asymptote']: print(f"        水平渐近线: b/c = {r['horizontal_asymptote']:.4f}")
+                    print(f"  n={n}: threshold range [{min(finite):.4f}, {max(finite):.4f}]")
+                    if r['vertical_asymptote']: print(f"        vertical asymptote: scale = {r['vertical_asymptote']:.4f}")
+                    if r['horizontal_asymptote']: print(f"        horizontal asymptote: b/c = {r['horizontal_asymptote']:.4f}")
                 else:
-                    print(f"  n={n}: 所有阈值均为无穷大")
+                    print(f"  n={n}: all thresholds are infinite")
     
     with open("all_distributions_results.pkl", 'wb') as f:
         pickle.dump(all_results, f)
-    print("\n"+"="*70+"\n所有计算完成! 合并结果保存到: all_distributions_results.pkl")
+    print("\n"+"="*70+"\nAll calculations completed! Combined results saved to: all_distributions_results.pkl")
     
-    print("\nLambda分布统计摘要:")
+    print("\nLambda distribution statistics summary:")
     print("-"*70)
     for key, res_dict in all_results.items():
-        print(f"\n分布: {key}")
+        print(f"\nDistribution: {key}")
         for n, r in res_dict.items():
             s = r['lambda_stats']
-            print(f"  n={n}: 均值={s['mean']:.3f}, 标准差={s['std']:.3f}, 范围=[{s['min']:.3f},{s['max']:.3f}], 偏度={s['skewness']:.3f}, 峰度={s['kurtosis']:.3f}")
+            print(f"  n={n}: mean={s['mean']:.3f}, std={s['std']:.3f}, range=[{s['min']:.3f},{s['max']:.3f}], skewness={s['skewness']:.3f}, kurtosis={s['kurtosis']:.3f}")
 
 if __name__ == "__main__":
     main()
