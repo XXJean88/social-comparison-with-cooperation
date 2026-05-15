@@ -7,110 +7,110 @@ import functools
 import math
 import pandas as pd
 
-@jit(nopython=True)  # 使用Numba加速
+@jit(nopython=True)  # Accelerate with Numba
 def single_round(state_array, payoff_array, game_matrix, nbr_mat, deg_array):
-    """每个节点只随机选择一个邻居进行博弈"""
-    for i in range(len(state_array)):  # 遍历所有节点
-        # 随机选择一个邻居
-        nbrs_num = deg_array[i]  # 节点i的邻居数量
-        nbrs_array = nbr_mat[i][:nbrs_num]  # 获取邻居列表
+    """Each node randomly selects one neighbor to play the game."""
+    for i in range(len(state_array)):  # Iterate over all nodes
+        # Randomly select a neighbor
+        nbrs_num = deg_array[i]  # Number of neighbors of node i
+        nbrs_array = nbr_mat[i][:nbrs_num]  # Get the list of neighbors
         
-        random_idx = random.randint(0, nbrs_num - 1)  # 随机选择邻居索引
-        random_neighbor = nbrs_array[random_idx]  # 获取随机邻居
+        random_idx = random.randint(0, nbrs_num - 1)  # Random neighbor index
+        random_neighbor = nbrs_array[random_idx]  # Obtain the random neighbor
         
-        # 只与随机选择的邻居进行博弈
+        # Play the game only with the selected neighbor
         payoff_array[i] = game_matrix[state_array[i]][state_array[random_neighbor]]
-    return payoff_array  # 返回收益数组
+    return payoff_array  # Return the payoff array
 
 @jit(nopython=True)
 def calculate_fitness(payoff_array, nbr_mat, deg_array, node_idx, w, lambda_param):
     """
-    计算适应度: F_i(x) = exp(w * (u_i(x) + λ * sum(p_im * u_m(x))))
-    同质性λ：所有节点都使用相同的λ参数
+    Calculate fitness: F_i(x) = exp(w * (u_i(x) + λ * sum(p_im * u_m(x))))
+    Homogeneous λ: all nodes use the same λ parameter.
     """
-    # 节点自身的收益
+    # Node's own payoff
     self_payoff = payoff_array[node_idx]
     
-    # 获取邻居
-    nbrs_num = deg_array[node_idx]  # 邻居数量
-    nbrs_array = nbr_mat[node_idx][:nbrs_num]  # 邻居列表
+    # Get neighbors
+    nbrs_num = deg_array[node_idx]  # Number of neighbors
+    nbrs_array = nbr_mat[node_idx][:nbrs_num]  # List of neighbors
     
-    # 计算邻居的平均收益
+    # Compute average payoff of neighbors
     neighbors_avg_payoff = np.sum(payoff_array[nbrs_array]) / nbrs_num
     
-    # 计算适应度（包含邻居收益）
+    # Compute fitness (including neighbor payoff)
     fitness = math.exp(w * (self_payoff + lambda_param * neighbors_avg_payoff))
     
     return fitness
 
 @jit(nopython=True)
 def strategy_update(state_array, payoff_array, nbr_mat, deg_array, nodesnum, w, lambda_param):
-    """策略更新"""
-    # 随机选择一个个体进行更新（所有个体更新速率相同）
+    """Strategy update."""
+    # Randomly select one individual to update (all individuals have the same update rate)
     update_node = random.randint(0, nodesnum - 1)
     
-    # 获取邻居信息
-    nbrs_num = deg_array[update_node]  # 邻居数量
-    nbrs_array = nbr_mat[update_node][:nbrs_num]  # 邻居列表
+    # Get neighbor information
+    nbrs_num = deg_array[update_node]  # Number of neighbors
+    nbrs_array = nbr_mat[update_node][:nbrs_num]  # List of neighbors
     
-    # 计算所有邻居的适应度
-    fitness_array = np.zeros(nbrs_num)  # 初始化适应度数组
+    # Compute fitness of all neighbors
+    fitness_array = np.zeros(nbrs_num)  # Initialize fitness array
     for i in range(nbrs_num):
-        neighbor_idx = nbrs_array[i]  # 邻居索引
+        neighbor_idx = nbrs_array[i]  # Neighbor index
         fitness_array[i] = calculate_fitness(payoff_array, nbr_mat, deg_array, neighbor_idx, w, lambda_param)
     
-    # 根据适应度选择策略
-    total_fitness = np.sum(fitness_array)  # 总适应度
+    # Select strategy based on fitness
+    total_fitness = np.sum(fitness_array)  # Total fitness
     if total_fitness > 0:
-        prob_array = fitness_array / total_fitness  # 计算选择概率
-        chosen_neighbor = rand_pick_list(nbrs_array, prob_array)  # 根据概率选择邻居
-        state_array[update_node] = state_array[chosen_neighbor]  # 更新策略
+        prob_array = fitness_array / total_fitness  # Compute selection probabilities
+        chosen_neighbor = rand_pick_list(nbrs_array, prob_array)  # Select neighbor according to probability
+        state_array[update_node] = state_array[chosen_neighbor]  # Update strategy
     
     return state_array
 
 @jit(nopython=True)
 def evolution(game_matrix, nbr_mat, deg_array, nodesnum, w, lambda_param):
-    total_generation = int(1e9)  # 总演化代数
-    payoff_array = np.zeros(nodesnum, dtype=np.float64)  # 收益数组
-    state_array = np.zeros(nodesnum, dtype=np.int_)  # 状态数组（0:背叛, 1:合作）
-    coop_ini = np.random.choice(nodesnum)  # 随机选择一个初始合作者
-    state_array[coop_ini] = 1  # 设置初始合作者
+    total_generation = int(1e9)  # Total number of generations
+    payoff_array = np.zeros(nodesnum, dtype=np.float64)  # Payoff array
+    state_array = np.zeros(nodesnum, dtype=np.int_)  # State array (0: defect, 1: cooperate)
+    coop_ini = np.random.choice(nodesnum)  # Randomly select an initial cooperator
+    state_array[coop_ini] = 1  # Set initial cooperator
     
     for time in range(total_generation):
-        # 进行单轮博弈和策略更新
+        # Perform one round of game and strategy update
         payoff_array = single_round(state_array, payoff_array, game_matrix, nbr_mat, deg_array)
         state_array = strategy_update(state_array, payoff_array, nbr_mat, deg_array, nodesnum, w, lambda_param)
-        payoff_array[:] = 0  # 重置收益数组
+        payoff_array[:] = 0  # Reset payoff array
         
-        coord = np.sum(state_array)  # 计算合作者数量
+        coord = np.sum(state_array)  # Count number of cooperators
         
-        # 检查是否达到吸收状态
-        if coord > nodesnum - 1:  # 所有节点都合作
+        # Check whether an absorbing state is reached
+        if coord > nodesnum - 1:  # All nodes cooperate
             return 1
-        if coord == 0:  # 所有节点都背叛
+        if coord == 0:  # All nodes defect
             return 0
             
-    return coord / nodesnum  # 返回合作者比例
+    return coord / nodesnum  # Return proportion of cooperators
 
 @jit(nopython=True)
 def process(core, b, nbr_mat, deg_array, nodesnum, lambda_param):
-    w = 0.01  # 选择强度参数
-    # 定义博弈矩阵（囚徒困境）
+    w = 0.01  # Selection intensity parameter
+    # Define payoff matrix (Prisoner's Dilemma)
     game_matrix = np.zeros((2, 2))
-    game_matrix[0][0] = 0      # 双方背叛
-    game_matrix[0][1] = b      # 自己背叛，对方合作
-    game_matrix[1][0] = -1     # 自己合作，对方背叛  
-    game_matrix[1][1] = b - 1  # 双方合作
+    game_matrix[0][0] = 0      # Both defect
+    game_matrix[0][1] = b      # Self defect, opponent cooperate
+    game_matrix[1][0] = -1     # Self cooperate, opponent defect  
+    game_matrix[1][1] = b - 1  # Both cooperate
     
-    repeat_time = int(1e6)  # 重复次数
-    repeat_array = np.zeros(repeat_time)  # 结果数组
+    repeat_time = int(1e6)  # Number of repetitions
+    repeat_array = np.zeros(repeat_time)  # Result array
     
     for rep in range(repeat_time):
-        # 运行演化过程
+        # Run the evolutionary process
         freq_c = evolution(game_matrix, nbr_mat, deg_array, nodesnum, w, lambda_param)
         repeat_array[rep] = freq_c
     
-    # 计算合作固定次数和总吸收次数
+    # Compute number of cooperative fixations and total absorptions
     coop_fixations = np.sum(repeat_array == 1)
     total_absorptions = np.sum(repeat_array == 1) + np.sum(repeat_array == 0)
     
@@ -118,9 +118,9 @@ def process(core, b, nbr_mat, deg_array, nodesnum, lambda_param):
 
 @jit(nopython=True)
 def rand_pick_list(pick_list, prob_list):
-    """根据概率分布从列表中选择一个元素"""
-    x = random.uniform(0, 1)  # 生成随机数
-    cumulative_probability = 0.0  # 累积概率
+    """Select an element from a list according to probability distribution."""
+    x = random.uniform(0, 1)  # Generate random number
+    cumulative_probability = 0.0  # Cumulative probability
     for item, item_probability in zip(pick_list, prob_list):
         cumulative_probability += item_probability
         if x <= cumulative_probability:
@@ -128,65 +128,65 @@ def rand_pick_list(pick_list, prob_list):
     return item
 
 def edge_list_array(edge_list):
-    """将边列表转换为numpy数组"""
-    edge_mat = np.zeros([len(edge_list), 2], int)  # 创建边矩阵
+    """Convert edge list to numpy array."""
+    edge_mat = np.zeros([len(edge_list), 2], int)  # Create edge matrix
     for i in range(len(edge_list)):
-        edge_mat[i, :] = np.array(edge_list[i])  # 填充边数据
+        edge_mat[i, :] = np.array(edge_list[i])  # Fill edge data
     return edge_mat
 
 def nbr_dict_mat(nbr_dict):
-    """将邻居字典转换为numpy数组"""
-    nodesnum = len(nbr_dict)  # 节点数量
-    nbr_mat = np.zeros([nodesnum, nodesnum], int)  # 邻居矩阵
-    deg_array = np.zeros(nodesnum, int)  # 度数组
+    """Convert neighbor dictionary to numpy array."""
+    nodesnum = len(nbr_dict)  # Number of nodes
+    nbr_mat = np.zeros([nodesnum, nodesnum], int)  # Neighbor matrix
+    deg_array = np.zeros(nodesnum, int)  # Degree array
     
     for i, nbrs in nbr_dict.items():
-        deg_array[i] = len(nbrs)  # 记录节点度数
+        deg_array[i] = len(nbrs)  # Record node degree
         if len(nbrs) > 0:
-            nbr_mat[i][:len(nbrs)] = np.array(nbrs)  # 填充邻居信息
+            nbr_mat[i][:len(nbrs)] = np.array(nbrs)  # Fill neighbor information
             
     return nbr_mat, deg_array
 
 if __name__ == "__main__":
-    # 生成n=50的图
+    # Generate graph with n=50
     n = 50
     # G = nx.random_graphs.random_regular_graph(4, n, seed=42)
     G = nx.watts_strogatz_graph(n=n, k=4, p=0.3, seed=42)
     # G = nx.barabasi_albert_graph(n=n, m=2, seed=42)
             
-    # 提取网络信息
-    edge_list = list(G.edges())  # 边列表
-    nbrs_dict = nx.to_dict_of_lists(G)  # 邻居字典
-    nbr_mat, deg_array = nbr_dict_mat(nbrs_dict)  # 转换为矩阵形式
-    nodesnum = G.number_of_nodes()  # 节点数量
+    # Extract network information
+    edge_list = list(G.edges())  # Edge list
+    nbrs_dict = nx.to_dict_of_lists(G)  # Neighbor dictionary
+    nbr_mat, deg_array = nbr_dict_mat(nbrs_dict)  # Convert to matrix form
+    nodesnum = G.number_of_nodes()  # Number of nodes
 
-    # 定义λ参数（同质性：所有节点使用相同的λ值）
+    # Define λ parameter (homogeneous: all nodes use the same λ value)
     lambda_param = -0.5
 
-    # 计算不同b值下的固定概率
-    b_array = [7,8,9,10,11]  # 收益参数b的值
-    cpu_cores_num = 8  # CPU核心数
-    rhoc_array = []  # 存储结果
-    detailed_results = []  # 存储详细结果
+    # Compute fixation probabilities for different b values
+    b_array = [7,8,9,10,11]  # Values of payoff parameter b
+    cpu_cores_num = 8  # Number of CPU cores
+    rhoc_array = []  # Store results
+    detailed_results = []  # Store detailed results
     
     for b_para in b_array:
-        core_list = np.arange(cpu_cores_num)  # 核心列表
-        pool = multiprocessing.Pool()  # 创建进程池
+        core_list = np.arange(cpu_cores_num)  # List of cores
+        pool = multiprocessing.Pool()  # Create process pool
 
-        # 使用部分函数固定参数
+        # Use partial to fix parameters
         pt = functools.partial(process, b=b_para, nbr_mat=nbr_mat, deg_array=deg_array,
                                nodesnum=nodesnum, lambda_param=lambda_param)
-        results = pool.map(pt, core_list)  # 多进程并行计算，现在返回元组列表
+        results = pool.map(pt, core_list)  # Parallel computation, returns list of tuples
 
-        # 汇总所有进程的结果
+        # Aggregate results from all processes
         total_coop_fixations = sum(result[0] for result in results)
         total_absorptions = sum(result[1] for result in results)
         
-        # 计算合作固定概率
+        # Compute cooperative fixation probability
         rho_c = total_coop_fixations / total_absorptions if total_absorptions > 0 else 0
-        rhoc_array.append(rho_c)  # 保存结果
+        rhoc_array.append(rho_c)  # Save result
         
-        # 保存详细结果
+        # Save detailed results
         detailed_results.append({
             "b": b_para,
             "coop_fixations": total_coop_fixations,
@@ -194,17 +194,17 @@ if __name__ == "__main__":
             "rho_c": rho_c
         })
         
-        pool.close()  # 关闭进程池
-        pool.join()  # 等待所有进程结束
+        pool.close()  # Close process pool
+        pool.join()  # Wait for all processes to finish
         
-        print(f"b={b_para}, 合作固定次数={total_coop_fixations}, 总吸收次数={total_absorptions}, rho_c={rho_c}")
+        print(f"b={b_para}, cooperative fixations={total_coop_fixations}, total absorptions={total_absorptions}, rho_c={rho_c}")
 
-    # 保存结果为CSV
+    # Save results as CSV
     result_df = pd.DataFrame({
-        "收益b值": b_array,
-        "合作固定概率rho_c": rhoc_array
+        "b value": b_array,
+        "cooperation fixation probability rho_c": rhoc_array
     })
     csv_filename = f"rg_n{n}_homogeneous_lambda{lambda_param}.csv"
     result_df.to_csv(csv_filename, index=False, encoding="utf-8-sig")
     
-    print(f"简要结果已保存至: {csv_filename}")
+    print(f"Summary results saved to: {csv_filename}")
