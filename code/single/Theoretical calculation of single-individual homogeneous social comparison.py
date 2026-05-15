@@ -3,35 +3,35 @@ import numpy as np
 import warnings
 import pickle
 
-# 忽略NumPy兼容性警告
+# Ignore NumPy compatibility warnings
 warnings.filterwarnings("ignore", message=".*compiled using NumPy 1.x.*")
 
 
 def precompute_network_constants(G, lambda_node):
     """
-    预计算与 λ 无关的网络常数，以及所需的线性系数。
+    Precompute network constants independent of λ, and the required linear coefficients.
     """
-    # 将邻接矩阵转换为 ndarray，避免 matrix 的奇怪行为
+    # Convert adjacency matrix to ndarray to avoid odd behavior of matrix
     adjacencyMatrix = np.asarray(nx.adjacency_matrix(G).todense())
     N = len(G.nodes)
 
-    # 计算转移概率矩阵 P
+    # Compute transition probability matrix P
     P = np.zeros((N, N))
     for row in range(N):
         sumOverRow = np.sum(adjacencyMatrix[row])
         if sumOverRow > 0:
             P[row, :] = adjacencyMatrix[row] / sumOverRow
 
-    # 高阶转移概率
+    # Higher-order transition probabilities
     P2 = P @ P
     P3 = P2 @ P
 
-    # 平稳分布 Pi (一维数组)
+    # Stationary distribution Pi (1D array)
     W = np.sum(adjacencyMatrix)
     Pi = np.sum(adjacencyMatrix, axis=1) / W
     Pi = Pi.flatten()
 
-    # ---------- 计算聚合时间矩阵 Eta ----------
+    # ---------- Compute aggregation time matrix Eta ----------
     A = np.zeros((N * N, N * N))
     B = np.ones((N * N, 1)) / 2
 
@@ -43,13 +43,13 @@ def precompute_network_constants(G, lambda_node):
         else:
             i = int(row / N)
             j = row % N
-            # 第一个块：基于j的转移
+            # First block: transitions based on j
             for k in range(i * N, (i + 1) * N):
                 if k % N == j:
                     A[row, k] = 1 - 0.5 * P[j, k % N]
                 else:
                     A[row, k] = -0.5 * P[j, k % N]
-            # 第二个块：基于i的转移
+            # Second block: transitions based on i
             for k in range(j * N, (j + 1) * N):
                 A[row, k] = -0.5 * P[i, k % N]
 
@@ -60,7 +60,7 @@ def precompute_network_constants(G, lambda_node):
 
     Eta = X.reshape(N, N)
 
-    # ---------- 计算常数项 eta_1, eta_2, eta_3 ----------
+    # ---------- Compute constant terms eta_1, eta_2, eta_3 ----------
     eta_1 = 0.0
     eta_2 = 0.0
     eta_3 = 0.0
@@ -70,11 +70,11 @@ def precompute_network_constants(G, lambda_node):
             eta_2 += Pi[i] * P2[i, j] * Eta[i, j]
             eta_3 += Pi[i] * P3[i, j] * Eta[i, j]
 
-    # ---------- 计算所需的系数 ----------
-    coeff_term2 = 0.0  # 对应 term2: ∑_{i,k} π_i P[i,j] P[j,k] η_{j,k}
-    coeff_term4 = 0.0  # 对应 term4: ∑_{i,j,k} π_i P[i,j] P[i,l] P[l,k] η_{j,k}
-    coeff_term6 = 0.0  # 对应 term6: ∑_{i,k} π_i P[i,j] P2[j,k] η_{j,k}
-    coeff_term8 = 0.0  # 对应 term8: ∑_{i,j,k} π_i P[i,j] P[i,l] P2[l,k] η_{j,k}
+    # ---------- Compute required coefficients ----------
+    coeff_term2 = 0.0  # Corresponds to term2: ∑_{i,k} π_i P[i,j] P[j,k] η_{j,k}
+    coeff_term4 = 0.0  # Corresponds to term4: ∑_{i,j,k} π_i P[i,j] P[i,l] P[l,k] η_{j,k}
+    coeff_term6 = 0.0  # Corresponds to term6: ∑_{i,k} π_i P[i,j] P2[j,k] η_{j,k}
+    coeff_term8 = 0.0  # Corresponds to term8: ∑_{i,j,k} π_i P[i,j] P[i,l] P2[l,k] η_{j,k}
 
     j_node = lambda_node
     l_node = lambda_node
@@ -115,9 +115,9 @@ def precompute_network_constants(G, lambda_node):
 
 def compute_threshold_for_lambda(lambda_val, constants):
     """
-    使用预计算的常数和 λ 值快速计算阈值。
-    分子 = η_2 - λ * coeff_term2 + λ * coeff_term4
-    分母 = (η_3 - η_1) - λ * coeff_term6 + λ * coeff_term8
+    Quickly compute the threshold using precomputed constants and a given λ.
+    Numerator = η_2 - λ * coeff_term2 + λ * coeff_term4
+    Denominator = (η_3 - η_1) - λ * coeff_term6 + λ * coeff_term8
     """
     numer = (constants['eta_2'] -
              constants['coeff_term2'] * lambda_val +
@@ -135,7 +135,7 @@ def compute_threshold_for_lambda(lambda_val, constants):
 
 def find_asymptotes(lambda_vals, thresholds, tolerance=0.05):
     """
-    查找渐近线位置
+    Find locations of asymptotes.
     """
     thresholds_array = np.array(thresholds)
     lambda_array = np.array(lambda_vals)
@@ -181,17 +181,17 @@ def find_asymptotes(lambda_vals, thresholds, tolerance=0.05):
 
 def run_calculations_for_network_type(graph_type, n_values, lambda_range=(-10, 10), lambda_step=0.5):
     """
-    为指定网络类型和多个网络规模运行计算（优化版本）。
+    Run calculations for a given network type and multiple network sizes (optimized version).
     """
     results_dict = {}
 
     for n in n_values:
-        print(f"\n开始计算网络规模 n = {n}")
+        print(f"\nStarting calculation for network size n = {n}")
 
-        # 设置随机种子以确保可重复性
+        # Set random seed for reproducibility
         final_seed = 42
 
-        # 生成网络
+        # Generate network
         if graph_type == "rg":
             G = nx.random_graphs.random_regular_graph(4, n, seed=final_seed)
             while not nx.is_connected(G):
@@ -211,39 +211,39 @@ def run_calculations_for_network_type(graph_type, n_values, lambda_range=(-10, 1
                 G = nx.watts_strogatz_graph(n=n, k=4, p=0.3, seed=final_seed)
             filename_prefix = "ws"
         else:
-            raise ValueError(f"未知的网络类型: {graph_type}")
+            raise ValueError(f"Unknown network type: {graph_type}")
 
-        print(f"网络类型: {graph_type}, 节点数: {n}, 边数: {G.number_of_edges()}")
+        print(f"Network type: {graph_type}, nodes: {n}, edges: {G.number_of_edges()}")
 
-        # 固定使用索引为1的节点作为有lambda值的节点
+        # Fix the node with index 1 as the one that carries λ
         lambda_node = 1
         if lambda_node >= n:
             lambda_node = 0
-        print(f"使用节点 {lambda_node} 作为有lambda值的节点")
+        print(f"Using node {lambda_node} as the node carrying lambda value")
 
-        # 预计算网络常数（与 λ 无关的部分）
+        # Precompute network constants (λ-independent part)
         constants = precompute_network_constants(G, lambda_node)
 
-        # 生成λ值范围
+        # Generate λ values
         lambda_start, lambda_end = lambda_range
         lambda_values = np.arange(lambda_start, lambda_end + lambda_step / 2, lambda_step)
         thresholds = []
 
-        # 遍历所有λ值，快速计算阈值
+        # Iterate over all λ values, compute thresholds quickly
         for idx, lambda_val in enumerate(lambda_values):
             try:
                 threshold = compute_threshold_for_lambda(lambda_val, constants)
             except Exception as e:
-                print(f"计算λ={lambda_val}时出错: {e}")
+                print(f"Error when computing λ={lambda_val}: {e}")
                 threshold = np.inf
 
             thresholds.append(threshold)
 
             if (idx + 1) % 10 == 0 or idx == 0 or idx == len(lambda_values) - 1:
                 status = "∞" if threshold == np.inf else f"{threshold:.6f}"
-                print(f"进度: {idx+1:3d}/{len(lambda_values):3d} | λ = {lambda_val:5.1f} | 阈值 = {status}")
+                print(f"Progress: {idx+1:3d}/{len(lambda_values):3d} | λ = {lambda_val:5.1f} | threshold = {status}")
 
-        # 查找渐近线
+        # Find asymptotes
         vertical_asymptote, horizontal_asymptote = find_asymptotes(lambda_values, thresholds)
 
         results_dict[n] = {
@@ -253,25 +253,25 @@ def run_calculations_for_network_type(graph_type, n_values, lambda_range=(-10, 1
             'horizontal_asymptote': horizontal_asymptote
         }
 
-        print(f"完成 n={n} 的计算")
+        print(f"Finished calculation for n={n}")
         if vertical_asymptote is not None:
-            print(f"垂直渐近线位置: λ = {vertical_asymptote:.4f}")
+            print(f"Vertical asymptote position: λ = {vertical_asymptote:.4f}")
         if horizontal_asymptote is not None:
-            print(f"水平渐近线位置: b/c = {horizontal_asymptote:.4f}")
+            print(f"Horizontal asymptote position: b/c = {horizontal_asymptote:.4f}")
 
     return results_dict, filename_prefix
 
 
 def save_results_pickle(results_dict, filename_prefix, network_type):
     """
-    保存结果为pickle文件（与原代码相同，未修改）。
+    Save results as pickle file.
     """
     filename = f"{network_type}_homogeneous_results_new.pkl"
 
     with open(filename, 'wb') as f:
         pickle.dump(results_dict, f)
 
-    print(f"结果已保存到: {filename}")
+    print(f"Results saved to: {filename}")
 
     for n, result in results_dict.items():
         csv_filename = f"direct_calculation_{filename_prefix}_{n}.csv"
@@ -283,55 +283,55 @@ def save_results_pickle(results_dict, filename_prefix, network_type):
                 else:
                     threshold_str = f"{threshold:.6f}"
                 f.write(f"{lambda_val:.6f},{threshold_str}\n")
-        print(f"CSV结果已保存到: {csv_filename}")
+        print(f"CSV results saved to: {csv_filename}")
 
 
 def main():
     """
-    主函数：计算多个网络规模的结果
+    Main function: compute results for multiple network sizes.
     """
-    # 参数设置
-    network_type = "ba"  # 可以选择 "ws", "ba", "rg"
-    n_values = [20, 50, 100, 200]  # 网络规模列表
+    # Parameter settings
+    network_type = "ba"  # options: "ws", "ba", "rg"
+    n_values = [20, 50, 100, 200]  # list of network sizes
 
-    # 设置lambda范围和步长
+    # Set lambda range and step size
     lambda_range = (-10, 10)
     lambda_step = 0.5
 
     print("=" * 60)
-    print("开始计算聚合时间阈值")
-    print(f"网络类型: {network_type}")
-    print(f"网络规模: {n_values}")
-    print(f"lambda范围: [{lambda_range[0]}, {lambda_range[1]}]")
-    print(f"lambda步长: {lambda_step}")
+    print("Starting calculation of aggregation time threshold")
+    print(f"Network type: {network_type}")
+    print(f"Network sizes: {n_values}")
+    print(f"lambda range: [{lambda_range[0]}, {lambda_range[1]}]")
+    print(f"lambda step: {lambda_step}")
     print("=" * 60)
 
-    # 运行计算
+    # Run calculations
     results_dict, filename_prefix = run_calculations_for_network_type(
         network_type, n_values, lambda_range, lambda_step
     )
 
-    # 保存结果
+    # Save results
     save_results_pickle(results_dict, filename_prefix, network_type)
 
-    # 打印结果摘要
+    # Print result summary
     print("\n" + "=" * 60)
-    print("结果摘要:")
+    print("Result summary:")
     for n, result in results_dict.items():
         finite_thresholds = [t for t in result['hom_thresholds'] if t != np.inf and t != float('inf')]
         if finite_thresholds:
             min_threshold = min(finite_thresholds)
             max_threshold = max(finite_thresholds)
-            print(f"n={n}: 阈值范围 [{min_threshold:.4f}, {max_threshold:.4f}]")
+            print(f"n={n}: threshold range [{min_threshold:.4f}, {max_threshold:.4f}]")
             if result['vertical_asymptote']:
-                print(f"     垂直渐近线: λ = {result['vertical_asymptote']:.4f}")
+                print(f"     Vertical asymptote: λ = {result['vertical_asymptote']:.4f}")
             if result['horizontal_asymptote']:
-                print(f"     水平渐近线: b/c = {result['horizontal_asymptote']:.4f}")
+                print(f"     Horizontal asymptote: b/c = {result['horizontal_asymptote']:.4f}")
         else:
-            print(f"n={n}: 所有阈值均为无穷大")
+            print(f"n={n}: All thresholds are infinite")
 
-    print("\n计算完成！您可以使用绘图代码绘制结果。")
-    print(f"绘图代码将读取文件: {network_type}_homogeneous_results_new.pkl")
+    print("\nCalculation complete! You can use the plotting code to visualize the results.")
+    print(f"Plotting code will read file: {network_type}_homogeneous_results_new.pkl")
 
 
 if __name__ == "__main__":
